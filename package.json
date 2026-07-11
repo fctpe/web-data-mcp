@@ -1,0 +1,60 @@
+{
+  "name": "web-data-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that turns Apify web-scraping actors into quality-gated, RAG-ready data tools for AI agents",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "apify",
+    "web-scraping",
+    "rag",
+    "ai-agents",
+    "data-quality"
+  ],
+  "mcpName": "io.github.fctpe/web-data-mcp",
+  "license": "MIT",
+  "author": "Furkan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fctpe/web-data-mcp.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.17.0",
+  "bin": {
+    "web-data-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "server.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "lint": "biome check src test",
+    "lint:fix": "biome check --write src test",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.0.0-beta.3",
+    "@modelcontextprotocol/server": "2.0.0-beta.3",
+    "ajv": "^8.17.1",
+    "apify-client": "^2.23.4",
+    "js-tiktoken": "^1.0.21",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@modelcontextprotocol/client": "2.0.0-beta.3",
+    "@types/node": "^26.1.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
