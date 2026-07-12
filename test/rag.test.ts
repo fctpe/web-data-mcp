@@ -57,6 +57,29 @@ describe('itemsToRagDocuments', () => {
     expect(skippedItems).toBe(1);
   });
 
+  it('never mistakes a long URL for document content (live-ads regression)', () => {
+    const cdnUrl = `https://scontent.example-cdn.net/v/t39.35426-6/img.jpg?${'x'.repeat(300)}`;
+    const adCopy =
+      'The best style lives on our marketplace. Shop curated fashion from real people, ' +
+      'sell what you no longer wear, and give every piece a second life.';
+    const { documents } = itemsToRagDocuments(
+      [{ pageProfilePictureUrl: cdnUrl, adCopy, adArchiveId: 'a1' }],
+      { maxTokens: 512, overlapTokens: 0 },
+    );
+    expect(documents).toHaveLength(1);
+    expect(documents[0]?.content).toBe(adCopy);
+  });
+
+  it('skips items whose only long string is a URL rather than embedding it', () => {
+    const cdnUrl = `https://cdn.example.net/asset?${'y'.repeat(300)}`;
+    const { documents, skippedItems } = itemsToRagDocuments([{ imageUrl: cdnUrl, id: '1' }], {
+      maxTokens: 512,
+      overlapTokens: 0,
+    });
+    expect(documents).toHaveLength(0);
+    expect(skippedItems).toBe(1);
+  });
+
   it('chunks long content and numbers the chunks under one content hash', () => {
     const { documents } = itemsToRagDocuments([{ url: 'https://example.com', text: LONG_TEXT }], {
       maxTokens: 100,

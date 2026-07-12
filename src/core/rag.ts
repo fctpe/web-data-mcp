@@ -15,13 +15,28 @@ const CONTENT_FIELD_PRIORITY = ['markdown', 'text', 'content', 'body', 'descript
 const SOURCE_FIELD_PRIORITY = ['url', 'link', 'sourceUrl', 'source_url', 'loadedUrl'];
 /* Fallback floor: shorter strings (ids, titles, enum values) are not document text. */
 const MIN_FALLBACK_CONTENT_CHARS = 80;
+/* Prose has whitespace between words; URLs, tokens, and base64 blobs do not.
+   Without this, a long CDN URL out-lengths the actual ad copy and the
+   "document" becomes an image URL (found by live testing against real ads). */
+const URL_LIKE = /^(https?:\/\/|www\.|data:)/i;
+const MIN_SPACE_RATIO = 0.05;
 
-function longestStringField(item: Record<string, unknown>): string | null {
+function looksLikeProse(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length < MIN_FALLBACK_CONTENT_CHARS) return false;
+  if (URL_LIKE.test(trimmed)) return false;
+  const spaces = (trimmed.match(/\s/g) ?? []).length;
+  return spaces / trimmed.length >= MIN_SPACE_RATIO;
+}
+
+function longestProseField(item: Record<string, unknown>): string | null {
   let best: string | null = null;
   for (const value of Object.values(item)) {
-    if (typeof value === 'string' && value.length > (best?.length ?? 0)) best = value;
+    if (typeof value === 'string' && looksLikeProse(value) && value.length > (best?.length ?? 0)) {
+      best = value;
+    }
   }
-  return best && best.trim().length >= MIN_FALLBACK_CONTENT_CHARS ? best : null;
+  return best;
 }
 
 function pickContent(item: Record<string, unknown>, contentFields?: string[]): string | null {
@@ -35,7 +50,7 @@ function pickContent(item: Record<string, unknown>, contentFields?: string[]): s
     const value = item[field];
     if (typeof value === 'string' && value.trim().length > 0) return value;
   }
-  return longestStringField(item);
+  return longestProseField(item);
 }
 
 function pickSource(item: Record<string, unknown>): string | null {
