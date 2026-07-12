@@ -8,8 +8,8 @@
 
 ## Abuse guards
 
-- Actors can only be started from an explicit allowlist (`WEB_DATA_MCP_ALLOWED_ACTORS`).
-- `scrape_url` rejects non-http(s) schemes and private/loopback/link-local hosts, so an agent cannot point the scraper at internal infrastructure or cloud metadata endpoints.
+- Actors can only be started from an explicit allowlist (`WEB_DATA_MCP_ALLOWED_ACTORS`) — including the built-in crawler behind `scrape_url`.
+- `scrape_url` rejects non-http(s) schemes and literal private/loopback/link-local hosts, including IPv4-mapped IPv6 forms (`[::ffff:169.254.169.254]`). This is defense-in-depth, not a full SSRF proxy: hostnames are not DNS-resolved and server-side redirects are not re-checked — the actual fetching happens on Apify's infrastructure, not on the machine running this server, so the guard's job is to keep obviously-internal targets out of run inputs.
 - Run memory, timeouts, page sizes, and response token budgets are clamped server-side regardless of what the model requests.
 
 ## Reporting
