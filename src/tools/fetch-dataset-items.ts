@@ -61,7 +61,8 @@ export function registerFetchDatasetItems(server: McpServer, deps: ServerDeps): 
       description:
         'Read items from an actor run dataset with pagination, field projection, and a hard ' +
         'token budget. Start with response_format "summary" to see the shape cheaply, then ' +
-        'fetch "items" with a fields projection.',
+        'fetch "items" with a fields projection. Items arrive as JSON in the text content; ' +
+        'structured content carries pagination metadata (total, next_offset, truncated).',
       inputSchema,
       outputSchema,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
