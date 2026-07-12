@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: MCP Inspector smoke (tools/list over stdio)
+        run: |
+          APIFY_TOKEN=ci-smoke-placeholder \
+            npx --yes @modelcontextprotocol/inspector --cli node dist/index.js --method tools/list \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const t=JSON.parse(d).tools;if(!t||t.length!==7){console.error('expected 7 tools, got',t&&t.length);process.exit(1);}console.log('inspector smoke ok:',t.map(x=>x.name).join(', '));})"
