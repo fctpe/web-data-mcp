@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { escalateInput, MAX_QUALITY_ATTEMPTS } from '../core/escalation.js';
-import { assertSafeUrl, clamp } from '../core/guards.js';
+import { assertAllowedActor, assertSafeUrl, clamp } from '../core/guards.js';
 import { assessQuality } from '../core/quality.js';
 import { countTokens, truncateToTokens } from '../core/tokens.js';
 import type { ServerDeps } from '../deps.js';
@@ -71,6 +71,8 @@ export function registerScrapeUrl(server: McpServer, deps: ServerDeps): void {
       try {
         assertSafeUrl(url);
         const { gateway, config } = deps;
+        // The built-in crawler is still subject to the operator's allowlist.
+        assertAllowedActor(SCRAPER_ACTOR, config.allowedActors);
         const baseInput: Record<string, unknown> = {
           startUrls: [{ url }],
           maxCrawlPages: max_pages,
@@ -81,38 +83,54 @@ export function registerScrapeUrl(server: McpServer, deps: ServerDeps): void {
 
         const maxAttempts = quality_retry ? MAX_QUALITY_ATTEMPTS : 1;
         let attempt = 0;
-        let run = null;
-        let items: unknown[] = [];
-        let quality = assessQuality([], { schema: PAGE_SCHEMA });
+        // Track the best successful attempt: a failed escalation must never
+        // discard an earlier run that already produced usable (if imperfect)
+        // content the caller paid for.
+        let bestRun = null;
+        let bestItems: unknown[] = [];
+        let bestQuality = assessQuality([], { schema: PAGE_SCHEMA });
+        let lastFailure: string | null = null;
 
         while (attempt < maxAttempts) {
           attempt++;
-          run = await gateway.callActor(SCRAPER_ACTOR, escalateInput(baseInput, attempt), {
-            memoryMb: clamp(4096, 128, config.limits.maxMemoryMb),
-            timeoutSecs: clamp(300, 30, config.limits.maxTimeoutSecs),
-            waitSecs: config.limits.maxWaitSecs,
-          });
+          let run: Awaited<ReturnType<typeof gateway.callActor>>;
+          try {
+            run = await gateway.callActor(SCRAPER_ACTOR, escalateInput(baseInput, attempt), {
+              memoryMb: clamp(4096, 128, config.limits.maxMemoryMb),
+              timeoutSecs: clamp(300, 30, config.limits.maxTimeoutSecs),
+              waitSecs: config.limits.maxWaitSecs,
+            });
+          } catch (err) {
+            lastFailure = err instanceof Error ? err.message : String(err);
+            continue;
+          }
           if (run.status !== 'SUCCEEDED' || !run.datasetId) {
+            lastFailure =
+              `run ${run.runId} finished with status ${run.status}` +
+              `${run.statusMessage ? ` (${run.statusMessage})` : ''}`;
             continue;
           }
           const page = await gateway.listDatasetItems(run.datasetId, { limit: SAMPLE_SIZE });
-          items = page.items;
-          quality = assessQuality(items, { schema: PAGE_SCHEMA });
+          const quality = assessQuality(page.items, { schema: PAGE_SCHEMA });
+          if (!bestRun || quality.score > bestQuality.score) {
+            bestRun = run;
+            bestItems = page.items;
+            bestQuality = quality;
+          }
           if (quality.score >= QUALITY_THRESHOLD) break;
         }
 
-        if (!run) {
-          return toolFailure(new Error('Scrape produced no run.'));
-        }
-        if (run.status !== 'SUCCEEDED') {
+        if (!bestRun) {
           return toolFailure(
             new Error(
-              `Scrape run ${run.runId} finished with status ${run.status}` +
-                `${run.statusMessage ? ` (${run.statusMessage})` : ''}. ` +
-                'Check get_run_status for details or retry later.',
+              `Scrape failed after ${attempt} attempt(s): ${lastFailure ?? 'no successful run'}. ` +
+                'Check get_run_status on any reported run id or retry later.',
             ),
           );
         }
+        const run = bestRun;
+        const items = bestItems;
+        const quality = bestQuality;
 
         const records = items.filter(
           (item): item is Record<string, unknown> => typeof item === 'object' && item !== null,

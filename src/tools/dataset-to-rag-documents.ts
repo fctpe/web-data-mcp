@@ -78,22 +78,45 @@ export function registerDatasetToRagDocuments(server: McpServer, deps: ServerDep
           overlapTokens: overlap_tokens,
         });
 
-        const kept: typeof documents = [];
-        let spent = 0;
-        let truncated = false;
+        // Budget by WHOLE items: emitting half an item's chunks and then
+        // paginating past it silently loses the rest of that item.
+        const DOC_ENVELOPE_TOKENS = 40;
+        const groups = new Map<number, typeof documents>();
         for (const doc of documents) {
-          const cost = doc.tokenCount + 40;
+          const group = groups.get(doc.itemIndex);
+          if (group) group.push(doc);
+          else groups.set(doc.itemIndex, [doc]);
+        }
+
+        const kept: typeof documents = [];
+        const oversizedItems: number[] = [];
+        let spent = 0;
+        let resumeItemIndex: number | null = null;
+        for (const [itemIndex, groupDocs] of groups) {
+          const cost = groupDocs.reduce(
+            (sum, doc) => sum + doc.tokenCount + DOC_ENVELOPE_TOKENS,
+            0,
+          );
+          if (cost > max_response_tokens && kept.length === 0) {
+            // This item can never fit this budget — skip it explicitly so the
+            // caller is never told to retry the same offset forever.
+            oversizedItems.push(page.offset + itemIndex);
+            continue;
+          }
           if (spent + cost > max_response_tokens) {
-            truncated = true;
+            resumeItemIndex = itemIndex;
             break;
           }
-          kept.push(doc);
+          kept.push(...groupDocs);
           spent += cost;
         }
 
+        const { nextOffset: pageNextOffset } = paginationInfo(page, pageLimit);
+        const truncated = resumeItemIndex !== null;
+        const nextOffset = truncated ? page.offset + (resumeItemIndex as number) : pageNextOffset;
+
         const rendered = renderDocuments(kept, format as DocumentFormat);
         const totalTokens = kept.reduce((sum, doc) => sum + doc.tokenCount, 0);
-        const { nextOffset } = paginationInfo(page, pageLimit);
         const structured = {
           dataset_id,
           documents: kept.length,
@@ -105,7 +128,11 @@ export function registerDatasetToRagDocuments(server: McpServer, deps: ServerDep
         const note = [
           `${kept.length} document(s), ${totalTokens} content tokens`,
           skippedItems > 0 ? `${skippedItems} item(s) skipped (no usable text field)` : null,
-          truncated ? 'response token budget hit — paginate or narrow content_fields' : null,
+          oversizedItems.length > 0
+            ? `item(s) at offset ${oversizedItems.join(', ')} exceed max_response_tokens even alone — ` +
+              'skipped; refetch them with a larger budget or smaller max_tokens_per_chunk'
+            : null,
+          truncated ? 'response token budget hit — continue from next_offset for the rest' : null,
           nextOffset !== null ? `continue at offset ${nextOffset}` : null,
         ]
           .filter(Boolean)

@@ -45,7 +45,12 @@ function main(): void {
       console.error('WEB_DATA_MCP_HTTP_TOKEN must be set for the http transport.');
       process.exit(1);
     }
-    serveHttp(deps, { port: Number.parseInt(values.port, 10), token: httpToken });
+    const port = Number.parseInt(values.port, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      console.error(`Invalid --port "${values.port}" — expected an integer between 1 and 65535.`);
+      process.exit(1);
+    }
+    serveHttp(deps, { port, token: httpToken });
     return;
   }
 

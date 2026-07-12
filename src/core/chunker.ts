@@ -8,6 +8,8 @@ export interface Chunk {
 
 const PARAGRAPH_BREAK = /\n{2,}/;
 const SENTENCE_BREAK = /(?<=[.!?])\s+/;
+const SEPARATOR = '\n\n';
+const SEPARATOR_TOKENS = countTokens(SEPARATOR);
 
 function splitOversized(segment: string, maxTokens: number): string[] {
   if (countTokens(segment) <= maxTokens) return [segment];
@@ -29,8 +31,10 @@ function splitOversized(segment: string, maxTokens: number): string[] {
 
 /**
  * Token-bounded chunking that respects paragraph and sentence boundaries.
- * Overlap is measured in tokens and taken from the tail of the previous
- * chunk, so downstream embeddings keep cross-chunk context.
+ * The bound is strict: separator tokens are accounted for, and the overlap
+ * seeded from the previous chunk's tail counts against the next chunk's
+ * budget (overlap is skipped for a chunk when it would not leave room for
+ * the next segment). maxTokens must leave headroom for one split segment.
  */
 export function chunkText(
   text: string,
@@ -44,11 +48,14 @@ export function chunkText(
   const normalized = text.replace(/\r\n/g, '\n').trim();
   if (normalized.length === 0) return [];
 
+  // Individual segments are pre-split below the budget minus separator room,
+  // so any single segment always fits into a fresh chunk.
+  const segmentBudget = Math.max(1, maxTokens - SEPARATOR_TOKENS);
   const segments = normalized
     .split(PARAGRAPH_BREAK)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0)
-    .flatMap((segment) => splitOversized(segment, maxTokens));
+    .flatMap((segment) => splitOversized(segment, segmentBudget));
 
   const chunks: Chunk[] = [];
   let current: string[] = [];
@@ -56,32 +63,34 @@ export function chunkText(
 
   const flush = () => {
     if (current.length === 0) return;
-    const content = current.join('\n\n');
+    const content = current.join(SEPARATOR);
     chunks.push({ content, tokenCount: countTokens(content), index: chunks.length });
   };
 
   for (const segment of segments) {
     const segmentTokens = countTokens(segment);
-    if (currentTokens + segmentTokens > maxTokens && current.length > 0) {
+    const joinCost = current.length > 0 ? SEPARATOR_TOKENS : 0;
+
+    if (current.length > 0 && currentTokens + joinCost + segmentTokens > maxTokens) {
       flush();
+      current = [];
+      currentTokens = 0;
+
       if (overlapTokens > 0) {
         const previous = chunks[chunks.length - 1];
         if (previous) {
           const tail = encodeTokens(previous.content).slice(-overlapTokens);
-          const overlapText = decodeTokens(tail);
-          current = [overlapText];
-          currentTokens = tail.length;
-        } else {
-          current = [];
-          currentTokens = 0;
+          // Seed overlap only when it leaves room for the segment itself.
+          if (tail.length + SEPARATOR_TOKENS + segmentTokens <= maxTokens) {
+            current = [decodeTokens(tail)];
+            currentTokens = tail.length;
+          }
         }
-      } else {
-        current = [];
-        currentTokens = 0;
       }
     }
+
     current.push(segment);
-    currentTokens += segmentTokens;
+    currentTokens += segmentTokens + (current.length > 1 ? SEPARATOR_TOKENS : 0);
   }
   flush();
 

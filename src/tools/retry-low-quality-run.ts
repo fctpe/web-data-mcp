@@ -79,13 +79,25 @@ export function registerRetryLowQualityRun(server: McpServer, deps: ServerDeps):
         let bestQuality = initialQuality;
         let attempts = 0;
 
+        const attemptFailures: string[] = [];
         while (bestQuality.score < threshold && attempts < max_attempts) {
           attempts++;
           const input = escalateInput(originalInput, attempts + 1);
-          const rerun = await gateway.callActor(originalRun.actorId, input, {
-            waitSecs: config.limits.maxWaitSecs,
-          });
-          if (rerun.status !== 'SUCCEEDED') continue;
+          let rerun: Awaited<ReturnType<typeof gateway.callActor>>;
+          try {
+            rerun = await gateway.callActor(originalRun.actorId, input, {
+              waitSecs: config.limits.maxWaitSecs,
+            });
+          } catch (err) {
+            // A failed escalation (e.g. no residential proxy access) must not
+            // destroy the best-run-so-far report this tool exists to provide.
+            attemptFailures.push(err instanceof Error ? err.message : String(err));
+            continue;
+          }
+          if (rerun.status !== 'SUCCEEDED') {
+            attemptFailures.push(`run ${rerun.runId} finished ${rerun.status}`);
+            continue;
+          }
           const quality = await scoreDataset(rerun.datasetId);
           if (quality.score > bestQuality.score) {
             bestRun = rerun;
@@ -104,6 +116,8 @@ export function registerRetryLowQualityRun(server: McpServer, deps: ServerDeps):
         };
 
         if (!reached && attempts >= max_attempts) {
+          const failureNote =
+            attemptFailures.length > 0 ? ` Failed attempts: ${attemptFailures.join('; ')}.` : '';
           return {
             content: [
               {
@@ -112,7 +126,7 @@ export function registerRetryLowQualityRun(server: McpServer, deps: ServerDeps):
                   `Quality is still ${bestQuality.score} (< ${threshold}) after ${attempts} ` +
                   `escalated re-run(s). Best dataset so far: ${bestRun.datasetId}. The target ` +
                   'site is likely blocking hard or the schema does not match its output — ' +
-                  'inspect sample_failures and adjust the schema or accept the best result.',
+                  `inspect sample_failures and adjust the schema or accept the best result.${failureNote}`,
               },
             ],
             structuredContent: structured,
