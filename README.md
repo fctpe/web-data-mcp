@@ -6,6 +6,8 @@
 
 **Quality-gated web data for AI agents.** An MCP server that runs [Apify](https://apify.com) scraping actors and — unlike a raw passthrough — validates what came back, scores it, retries with stronger anti-blocking settings when it's bad, and hands your agent embedding-ready chunks instead of a JSON dump.
 
+![demo: offline test suite and MCP Inspector listing the seven tools](docs/demo.gif)
+
 Scraped data fails silently: the run "succeeds" but the dataset is a wall of `Access Denied` pages, half-empty records, or duplicates — and an agent that can't see quality will happily reason over garbage. This server makes data quality a first-class, machine-readable part of every tool result.
 
 ```mermaid
