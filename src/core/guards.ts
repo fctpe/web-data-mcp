@@ -27,7 +27,9 @@ export function assertSafeUrl(raw: string): URL {
     throw new WebDataError(`Invalid URL: ${raw}`);
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new WebDataError(`Unsupported URL scheme "${url.protocol}" — only http and https are allowed.`);
+    throw new WebDataError(
+      `Unsupported URL scheme "${url.protocol}" — only http and https are allowed.`,
+    );
   }
   if (PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(url.hostname))) {
     throw new WebDataError(`Refusing to scrape private or local host "${url.hostname}".`);
