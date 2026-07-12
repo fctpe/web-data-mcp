@@ -47,28 +47,28 @@ Every tool ships `inputSchema` **and** `outputSchema` (structured output), behav
 ## Quickstart
 
 ```bash
+git clone https://github.com/fctpe/web-data-mcp && cd web-data-mcp
+pnpm install && pnpm build
+
+# poke every tool in a UI
+APIFY_TOKEN=your-token npx @modelcontextprotocol/inspector node dist/index.js
+
 # Claude Code
-claude mcp add web-data --env APIFY_TOKEN=your-token -- npx -y web-data-mcp
+claude mcp add web-data --env APIFY_TOKEN=your-token -- node /path/to/web-data-mcp/dist/index.js
 
 # Claude Desktop / Cursor / any stdio client — add to your MCP config:
 {
   "mcpServers": {
     "web-data": {
-      "command": "npx",
-      "args": ["-y", "web-data-mcp"],
+      "command": "node",
+      "args": ["/path/to/web-data-mcp/dist/index.js"],
       "env": { "APIFY_TOKEN": "your-token" }
     }
   }
 }
 ```
 
-From source:
-
-```bash
-git clone https://github.com/fctpe/web-data-mcp && cd web-data-mcp
-pnpm install && pnpm build
-npx @modelcontextprotocol/inspector node dist/index.js   # poke every tool in a UI
-```
+(`npx -y web-data-mcp` will replace the node path once the first npm release is published — the `bin` entry is already wired.)
 
 Free Apify accounts include $5/month of platform credit — enough for hundreds of `scrape_url` calls with the default cheerio crawler.
 
@@ -118,7 +118,7 @@ The live runs caught two bugs the mocked tests couldn't, both fixed with regress
 
 ## Design notes
 
-Architecture decisions are recorded in [`docs/adr/`](docs/adr): curated tools vs. dynamic discovery, SDK v2 beta, the dependency-injected gateway that keeps 52 tests offline and sub-second, and hard token budgets with explicit handles. Security posture (token handling, SSRF guard, transport auth) is in [SECURITY.md](SECURITY.md).
+Architecture decisions are recorded in [`docs/adr/`](docs/adr): curated tools vs. dynamic discovery, SDK v2 beta, the dependency-injected gateway that keeps the whole test suite offline and sub-second, and hard token budgets with explicit handles. Security posture (token handling, URL guard, transport auth) is in [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
@@ -131,9 +131,10 @@ Architecture decisions are recorded in [`docs/adr/`](docs/adr): curated tools vs
 ## Development
 
 ```bash
-pnpm test        # 52 offline tests incl. full client<->server integration
+pnpm test        # offline test suite incl. full client<->server integration
 pnpm lint && pnpm typecheck
 pnpm inspect     # build + MCP Inspector
+APIFY_TOKEN=... SMOKE_ACTOR=... node scripts/live-smoke.mjs   # pre-release live smoke
 ```
 
 Built with AI-assisted scaffolding; architecture, quality heuristics, tool contracts, and tests are hand-designed — see the ADRs for the reasoning.

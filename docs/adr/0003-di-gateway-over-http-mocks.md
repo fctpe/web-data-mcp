@@ -12,6 +12,6 @@ Define a small `ApifyGateway` interface (`src/core/apify.ts`) as the only seam t
 
 ## Consequences
 
-- The entire test suite (52 tests) runs offline in under a second, including full client↔server integration through `InMemoryTransport`.
-- The real gateway is intentionally thin — error mapping and retries only — so the untested surface is small; one live smoke test against `apify/hello-world` covers the wiring before releases.
+- The entire test suite runs offline in under a second, including full client↔server integration through `InMemoryTransport`.
+- The real gateway is intentionally thin — error mapping and retries only — so the untested surface is small; `scripts/live-smoke.mjs` exercises the full flow against a real actor before releases (see the README's pressure-test results for what live runs caught that mocks could not).
 - Upstream API changes surface in exactly one file.
