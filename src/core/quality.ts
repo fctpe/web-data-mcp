@@ -62,7 +62,8 @@ export function assessQuality(
       fieldCompleteness: 0,
       duplicateRate: 0,
       suspectedBlockRate: 0,
-      sampleFailures: items.length === 0 ? ['Dataset is empty.'] : ['No object-shaped items found.'],
+      sampleFailures:
+        items.length === 0 ? ['Dataset is empty.'] : ['No object-shaped items found.'],
     };
   }
 

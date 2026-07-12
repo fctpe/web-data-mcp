@@ -20,7 +20,10 @@ export function decodeTokens(tokens: number[]): string {
   return getEncoder().decode(tokens);
 }
 
-export function truncateToTokens(text: string, maxTokens: number): { text: string; truncated: boolean } {
+export function truncateToTokens(
+  text: string,
+  maxTokens: number,
+): { text: string; truncated: boolean } {
   const tokens = getEncoder().encode(text);
   if (tokens.length <= maxTokens) {
     return { text, truncated: false };
