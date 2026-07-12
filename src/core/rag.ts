@@ -3,6 +3,9 @@ import { chunkText } from './chunker.js';
 
 export interface RagDocument {
   id: string;
+  /** Position of the originating item within the fetched page — lets callers
+   *  paginate by whole items when a response budget truncates the output. */
+  itemIndex: number;
   source: string | null;
   chunkIndex: number;
   chunkCount: number;
@@ -78,7 +81,7 @@ export function itemsToRagDocuments(
   const documents: RagDocument[] = [];
   let skippedItems = 0;
 
-  for (const raw of items) {
+  for (const [itemIndex, raw] of items.entries()) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
       skippedItems++;
       continue;
@@ -105,6 +108,7 @@ export function itemsToRagDocuments(
     for (const chunk of chunks) {
       documents.push({
         id: `${contentHash}-${chunk.index}`,
+        itemIndex,
         source,
         chunkIndex: chunk.index,
         chunkCount: chunks.length,

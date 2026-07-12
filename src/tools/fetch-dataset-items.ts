@@ -110,7 +110,12 @@ export function registerFetchDatasetItems(server: McpServer, deps: ServerDeps): 
 
         const fit = fitToTokenBudget(page.items, max_tokens);
         const included = fit.serialized;
-        const nextOffset = fit.truncated ? page.offset + fit.includedCount : pageNextOffset;
+        // An item bigger than the whole budget would pin next_offset to the
+        // current offset forever — advance past it and say so instead.
+        const stuckOnOversized = fit.truncated && fit.includedCount === 0 && page.count > 0;
+        const nextOffset = fit.truncated
+          ? page.offset + (stuckOnOversized ? 1 : fit.includedCount)
+          : pageNextOffset;
         const structured = {
           dataset_id,
           total: effectiveTotal,
@@ -120,9 +125,13 @@ export function registerFetchDatasetItems(server: McpServer, deps: ServerDeps): 
           truncated: fit.truncated,
           fields_seen: fieldsSeen,
         };
-        const note = fit.truncated
-          ? `\n\n(Token budget hit: returned ${fit.includedCount} of ${page.count} fetched items. Continue at offset ${nextOffset}.)`
-          : '';
+        const note = stuckOnOversized
+          ? `\n\n(The item at offset ${page.offset} alone exceeds max_tokens=${max_tokens}; skipped. ` +
+            'Refetch it with a fields projection or a larger max_tokens. ' +
+            `Continuing at offset ${nextOffset}.)`
+          : fit.truncated
+            ? `\n\n(Token budget hit: returned ${fit.includedCount} of ${page.count} fetched items. Continue at offset ${nextOffset}.)`
+            : '';
         return {
           content: [{ type: 'text', text: `[${included.join(',\n')}]${note}` }],
           structuredContent: structured,

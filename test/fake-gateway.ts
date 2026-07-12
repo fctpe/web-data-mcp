@@ -1,4 +1,5 @@
 import type { ApifyGateway, RunInfo, RunStatus } from '../src/core/apify.js';
+import { WebDataError } from '../src/core/errors.js';
 
 export interface CallRecord {
   actorId: string;
@@ -9,7 +10,7 @@ export type Scenario = (
   actorId: string,
   input: Record<string, unknown>,
   callNumber: number,
-) => { status?: RunStatus; items: unknown[] };
+) => { status?: RunStatus; items: unknown[]; error?: string };
 
 /**
  * In-memory stand-in for the Apify API. Each actor call mints a run and a
@@ -52,7 +53,8 @@ export class FakeGateway implements ApifyGateway {
 
   async callActor(actorId: string, input: Record<string, unknown>): Promise<RunInfo> {
     this.calls.push({ actorId, input });
-    const { status = 'SUCCEEDED', items } = this.scenario(actorId, input, this.calls.length);
+    const { status = 'SUCCEEDED', items, error } = this.scenario(actorId, input, this.calls.length);
+    if (error) throw new WebDataError(error, { statusCode: 403 });
     const run = this.mint(actorId, status, items);
     this.inputs.set(run.runId, input);
     return run;

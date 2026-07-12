@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer } from 'node:http';
 import {
   localhostHostValidation,
@@ -10,10 +10,10 @@ import type { ServerDeps } from '../deps.js';
 import { createServer } from '../server.js';
 
 function constantTimeEquals(a: string, b: string): boolean {
-  const bufferA = Buffer.from(a);
-  const bufferB = Buffer.from(b);
-  if (bufferA.length !== bufferB.length) return false;
-  return timingSafeEqual(bufferA, bufferB);
+  // Hash both sides first so the comparison never branches on input length.
+  const digestA = createHash('sha256').update(a).digest();
+  const digestB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(digestA, digestB);
 }
 
 /**

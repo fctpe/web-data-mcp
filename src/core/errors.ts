@@ -71,7 +71,3 @@ export function mapApifyError(err: unknown, context: string): WebDataError {
   const detail = err instanceof Error ? err.message : String(err);
   return new WebDataError(`${context}: ${detail}`);
 }
-
-export function isRetryableStatus(status: number): boolean {
-  return RETRYABLE_STATUS.has(status);
-}

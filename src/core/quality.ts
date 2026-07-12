@@ -57,7 +57,7 @@ export function assessQuality(
   if (records.length === 0) {
     return {
       score: 0,
-      itemCount: items.length,
+      itemCount: 0,
       schemaPassRate: opts.schema ? 0 : null,
       fieldCompleteness: 0,
       duplicateRate: 0,
