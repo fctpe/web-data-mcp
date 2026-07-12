@@ -3,7 +3,7 @@ import * as z from 'zod/v4';
 import { clamp } from '../core/guards.js';
 import { type DocumentFormat, itemsToRagDocuments, renderDocuments } from '../core/rag.js';
 import type { ServerDeps } from '../deps.js';
-import { toolFailure } from './helpers.js';
+import { paginationInfo, toolFailure } from './helpers.js';
 
 const inputSchema = z.object({
   dataset_id: z.string(),
@@ -68,10 +68,8 @@ export function registerDatasetToRagDocuments(server: McpServer, deps: ServerDep
             new Error('overlap_tokens must be smaller than max_tokens_per_chunk.'),
           );
         }
-        const page = await gateway.listDatasetItems(dataset_id, {
-          offset,
-          limit: clamp(limit, 1, config.limits.maxItemsPerPage),
-        });
+        const pageLimit = clamp(limit, 1, config.limits.maxItemsPerPage);
+        const page = await gateway.listDatasetItems(dataset_id, { offset, limit: pageLimit });
 
         const { documents, skippedItems } = itemsToRagDocuments(page.items, {
           ...(content_fields !== undefined && { contentFields: content_fields }),
@@ -95,7 +93,7 @@ export function registerDatasetToRagDocuments(server: McpServer, deps: ServerDep
 
         const rendered = renderDocuments(kept, format as DocumentFormat);
         const totalTokens = kept.reduce((sum, doc) => sum + doc.tokenCount, 0);
-        const nextOffset = page.offset + page.count < page.total ? page.offset + page.count : null;
+        const { nextOffset } = paginationInfo(page, pageLimit);
         const structured = {
           dataset_id,
           documents: kept.length,

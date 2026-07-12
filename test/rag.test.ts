@@ -35,6 +35,28 @@ describe('itemsToRagDocuments', () => {
     expect(skippedItems).toBe(3);
   });
 
+  it('falls back to the longest string field when no conventional content field exists', () => {
+    const instructions =
+      'Den Teig aus Mehl, Butter und Zucker kneten, die Äpfel schälen und in Spalten schneiden, ' +
+      'alles in eine Springform geben und bei 180 Grad etwa 45 Minuten backen.';
+    const { documents, skippedItems } = itemsToRagDocuments(
+      [{ recipeId: 'r1', title: 'Apfelkuchen', url: 'https://example.com/r1', instructions }],
+      { maxTokens: 512, overlapTokens: 0 },
+    );
+    expect(skippedItems).toBe(0);
+    expect(documents[0]?.content).toBe(instructions);
+    expect(documents[0]?.source).toBe('https://example.com/r1');
+  });
+
+  it('does not treat short id/title strings as document content', () => {
+    const { documents, skippedItems } = itemsToRagDocuments(
+      [{ recipeId: 'r1', title: 'Apfelkuchen', category: 'Backen' }],
+      { maxTokens: 512, overlapTokens: 0 },
+    );
+    expect(documents).toHaveLength(0);
+    expect(skippedItems).toBe(1);
+  });
+
   it('chunks long content and numbers the chunks under one content hash', () => {
     const { documents } = itemsToRagDocuments([{ url: 'https://example.com', text: LONG_TEXT }], {
       maxTokens: 100,
