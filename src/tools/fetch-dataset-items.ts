@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { clamp } from '../core/guards.js';
 import type { ServerDeps } from '../deps.js';
-import { fitToTokenBudget, toolFailure } from './helpers.js';
+import { fitToTokenBudget, paginationInfo, toolFailure } from './helpers.js';
 
 const inputSchema = z.object({
   dataset_id: z.string().describe('Dataset id from run_actor / scrape_url / get_run_status'),
@@ -69,22 +69,24 @@ export function registerFetchDatasetItems(server: McpServer, deps: ServerDeps): 
     async ({ dataset_id, offset, limit, fields, response_format, max_tokens }) => {
       try {
         const { gateway, config } = deps;
+        const pageLimit = clamp(limit, 1, config.limits.maxItemsPerPage);
         const page = await gateway.listDatasetItems(dataset_id, {
           offset,
-          limit: clamp(limit, 1, config.limits.maxItemsPerPage),
+          limit: pageLimit,
           ...(fields !== undefined && { fields }),
         });
 
         const fieldsSeen = summarizeFields(page.items);
+        const { effectiveTotal, nextOffset: pageNextOffset } = paginationInfo(page, pageLimit);
 
         if (response_format === 'summary') {
           const preview = page.items[0] ? JSON.stringify(page.items[0]).slice(0, 1500) : 'n/a';
           const structured = {
             dataset_id,
-            total: page.total,
+            total: effectiveTotal,
             offset: page.offset,
             returned: 0,
-            next_offset: page.offset + page.count < page.total ? page.offset + page.count : null,
+            next_offset: pageNextOffset,
             truncated: false,
             fields_seen: fieldsSeen,
           };
@@ -96,7 +98,7 @@ export function registerFetchDatasetItems(server: McpServer, deps: ServerDeps): 
               {
                 type: 'text',
                 text:
-                  `Dataset ${dataset_id}: ${page.total} items total.\n\nFields:\n${fieldLines}\n\n` +
+                  `Dataset ${dataset_id}: ${effectiveTotal} items total.\n\nFields:\n${fieldLines}\n\n` +
                   `First item preview:\n${preview}\n\n` +
                   'Call again with response_format "items" and a fields projection to read data.',
               },
@@ -107,11 +109,10 @@ export function registerFetchDatasetItems(server: McpServer, deps: ServerDeps): 
 
         const fit = fitToTokenBudget(page.items, max_tokens);
         const included = fit.serialized;
-        const nextOffset =
-          page.offset + fit.includedCount < page.total ? page.offset + fit.includedCount : null;
+        const nextOffset = fit.truncated ? page.offset + fit.includedCount : pageNextOffset;
         const structured = {
           dataset_id,
-          total: page.total,
+          total: effectiveTotal,
           offset: page.offset,
           returned: fit.includedCount,
           next_offset: nextOffset,

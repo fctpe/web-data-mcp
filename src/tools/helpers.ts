@@ -37,6 +37,22 @@ export function toolFailure(err: unknown): ToolFailure {
 }
 
 /**
+ * Apify's dataset itemCount is eventually consistent — immediately after a
+ * run finishes, `total` can read 0 while items are already listable. Treat
+ * the fetched page as a floor for the total and assume a full page means
+ * more may follow.
+ */
+export function paginationInfo(
+  page: { offset: number; count: number; total: number },
+  limitRequested: number,
+): { effectiveTotal: number; nextOffset: number | null } {
+  const effectiveTotal = Math.max(page.total, page.offset + page.count);
+  const hasMore =
+    page.offset + page.count < effectiveTotal || (page.count === limitRequested && page.count > 0);
+  return { effectiveTotal, nextOffset: hasMore ? page.offset + page.count : null };
+}
+
+/**
  * Serializes items into the response until the token budget is spent.
  * Returns the JSON strings that fit plus how many items were left out.
  */

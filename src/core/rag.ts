@@ -13,14 +13,29 @@ export interface RagDocument {
 
 const CONTENT_FIELD_PRIORITY = ['markdown', 'text', 'content', 'body', 'description'];
 const SOURCE_FIELD_PRIORITY = ['url', 'link', 'sourceUrl', 'source_url', 'loadedUrl'];
+/* Fallback floor: shorter strings (ids, titles, enum values) are not document text. */
+const MIN_FALLBACK_CONTENT_CHARS = 80;
+
+function longestStringField(item: Record<string, unknown>): string | null {
+  let best: string | null = null;
+  for (const value of Object.values(item)) {
+    if (typeof value === 'string' && value.length > (best?.length ?? 0)) best = value;
+  }
+  return best && best.trim().length >= MIN_FALLBACK_CONTENT_CHARS ? best : null;
+}
 
 function pickContent(item: Record<string, unknown>, contentFields?: string[]): string | null {
-  const fields = contentFields && contentFields.length > 0 ? contentFields : CONTENT_FIELD_PRIORITY;
-  const parts = fields
-    .map((field) => item[field])
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-  if (parts.length === 0) return null;
-  return contentFields && contentFields.length > 0 ? parts.join('\n\n') : (parts[0] ?? null);
+  if (contentFields && contentFields.length > 0) {
+    const parts = contentFields
+      .map((field) => item[field])
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    return parts.length > 0 ? parts.join('\n\n') : null;
+  }
+  for (const field of CONTENT_FIELD_PRIORITY) {
+    const value = item[field];
+    if (typeof value === 'string' && value.trim().length > 0) return value;
+  }
+  return longestStringField(item);
 }
 
 function pickSource(item: Record<string, unknown>): string | null {
