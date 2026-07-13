@@ -46,6 +46,35 @@ Use both — they solve different problems.
 
 Every tool ships `inputSchema` **and** `outputSchema` (structured output), behavior annotations (`readOnlyHint`, `openWorldHint`, …), and returns failures as model-readable `isError` results with a concrete next step — so the calling agent can self-correct instead of stalling.
 
+### What the agent actually gets back
+
+The point is that data quality is *structured*, not buried in prose. A `validate_dataset` result (or the `quality` block on `scrape_url`) looks like this — the agent can branch on `score`, and `sample_failures` tells it exactly what's wrong:
+
+```jsonc
+{
+  "quality": {
+    "score": 0.42,                    // composite 0..1 — below threshold, don't trust
+    "item_count": 50,
+    "schema_pass_rate": 0.30,         // 70% of items fail your JSON Schema
+    "field_completeness": 0.61,
+    "duplicate_rate": 0.12,
+    "suspected_block_rate": 0.24,     // ~1 in 4 items look like a bot wall
+    "sample_failures": [
+      "item[3]/price: must be number",
+      "item[7]: 'Attention Required | Cloudflare' in body"
+    ]
+  }
+}
+```
+
+And a `dataset_to_rag_documents` line — token-bounded, source-attributed, content-hashed for idempotent upserts:
+
+```jsonc
+{ "id": "a1b2c3d4e5f6-0", "source": "https://example.com/p/12", "chunkIndex": 0,
+  "chunkCount": 1, "tokenCount": 118, "content": "…clean extracted text…",
+  "metadata": { "crawledAt": "2026-07-12T…" } }
+```
+
 ## Quickstart
 
 ```bash
@@ -105,7 +134,7 @@ OPENAI_API_KEY=... APIFY_TOKEN=... npm start -- "https://apify.com/pricing"
 
 ## Results: pressure-tested against production actors
 
-Beyond the 60 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
+Beyond the 75 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
 
 | Actor | Verdict | Quality score | Evidence |
 |---|---|---|---|
