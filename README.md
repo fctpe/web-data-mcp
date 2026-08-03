@@ -151,9 +151,9 @@ Beyond the 93 offline tests, the full MCP flow (run → status → fetch → val
 
 | Actor | Verdict | Quality score | Evidence |
 |---|---|---|---|
-| reddit-scraper-pro (keyword search) | ✅ pass | 0.989 (schema pass rate 1.0) | 54 live posts; 44 RAG docs auto-detected; token budget truncated at 6/10 items with correct continuation offset |
-| event-scraper-pro (Berlin AI events) | ✅ pass | 0.903 (schema pass rate 1.0) | 28 live events; titles 100% filled; 37 RAG docs from `description` |
-| facebook-ad-intelligence-pro (ad library) | ✅ pass after fix | 0.938 | 10 live ads, key fields (adCopy, headline, pageName) filled |
+| Reddit keyword search | ✅ pass | 0.989 (schema pass rate 1.0) | 54 live posts; 44 RAG docs auto-detected; token budget truncated at 6/10 items with correct continuation offset |
+| Event listings (Berlin AI events) | ✅ pass | 0.903 (schema pass rate 1.0) | 28 live events; titles 100% filled; 37 RAG docs from `description` |
+| Ad-library intelligence | ✅ pass after fix | 0.938 | 10 live ads, key fields (adCopy, headline, pageName) filled |
 
 The live runs caught two bugs the mocked tests couldn't, both fixed with regression tests:
 
