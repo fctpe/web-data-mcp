@@ -11,6 +11,26 @@ const SCRAPER_ACTOR = 'apify/website-content-crawler';
 const QUALITY_THRESHOLD = 0.7;
 const SAMPLE_SIZE = 50;
 
+/**
+ * Escalate whenever more than a fifth of the sample looks like a bot wall, even
+ * if the composite score is otherwise fine.
+ *
+ * `assessQuality` already caps the score at `1 - suspectedBlockRate`, which
+ * catches a wholly blocked batch. A partly blocked one is the case the cap
+ * alone still lets through: 25% walls caps at 0.75, above the 0.70 threshold,
+ * and a quarter of the pages being walls is precisely the signal a residential
+ * proxy is meant to answer. Blocking is a distinct failure with a distinct
+ * remedy, so it gets its own trigger rather than being folded into a number
+ * that mixes it with schema drift and duplicates.
+ */
+const BLOCK_RATE_THRESHOLD = 0.2;
+
+/** Both reasons a run is worth escalating, in one place so the retry loop and
+ * the caller-facing summary can never disagree about what "good enough" means. */
+function needsEscalation(quality: { score: number; suspectedBlockRate: number }): boolean {
+  return quality.score < QUALITY_THRESHOLD || quality.suspectedBlockRate > BLOCK_RATE_THRESHOLD;
+}
+
 /** Minimum shape a usable page item must have: a URL plus non-empty text or markdown. */
 const PAGE_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -117,7 +137,7 @@ export function registerScrapeUrl(server: McpServer, deps: ServerDeps): void {
             bestItems = page.items;
             bestQuality = quality;
           }
-          if (quality.score >= QUALITY_THRESHOLD) break;
+          if (!needsEscalation(quality)) break;
         }
 
         if (!bestRun) {
@@ -160,10 +180,19 @@ export function registerScrapeUrl(server: McpServer, deps: ServerDeps): void {
           truncated,
         };
 
+        // Name the bot wall explicitly. "LOW QUALITY" reads as thin content, and
+        // a model that is told the content is thin will summarise the wall; one
+        // that is told the page was never served will say so instead.
+        const blockedNote =
+          quality.suspectedBlockRate > BLOCK_RATE_THRESHOLD
+            ? ` — BLOCKED: ${Math.round(quality.suspectedBlockRate * 100)}% of sampled pages look` +
+              ' like bot walls, not content, and escalation did not get past them'
+            : quality.score < QUALITY_THRESHOLD
+              ? ' — LOW QUALITY, treat content with caution'
+              : '';
         const summaryLine =
           `Scraped ${pages.length} page(s), quality score ${quality.score}` +
-          `${attempt > 1 ? ` after ${attempt} attempts` : ''}` +
-          `${quality.score < QUALITY_THRESHOLD ? ' — LOW QUALITY, treat content with caution' : ''}.`;
+          `${attempt > 1 ? ` after ${attempt} attempts` : ''}${blockedNote}.`;
 
         return {
           content: [{ type: 'text', text: `${summaryLine}\n\n${text}` }],

@@ -104,7 +104,37 @@ export const GOOD_PAGE = {
     '# Pricing\n\nExample Corp pricing starts at 29 euros per month for the starter plan and includes support.',
 };
 
+/**
+ * A realistic bot wall, and the reason it is realistic matters.
+ *
+ * This used to be the 13-character string 'Access Denied'. That failed
+ * PAGE_SCHEMA's `minLength: 50` on `text`, so schemaPassRate went to 0 and the
+ * batch scored ~0.30 — the escalation test passed, but for a reason that had
+ * nothing to do with block detection. A real Cloudflare interstitial is several
+ * hundred characters of prose with a url, so it passes the schema, looks
+ * complete, is not a duplicate, and used to score 0.85: above the retry
+ * threshold, escalation never triggered. The fixture was hiding the defect it
+ * was supposed to cover.
+ *
+ * Kept long enough to clear the schema on purpose. If someone shortens it, the
+ * assertions in test/blocked-content.test.ts stop testing block detection and
+ * start testing `minLength` again — which is why that file asserts the length.
+ */
 export const BLOCKED_PAGE = {
   url: 'https://example.com/pricing',
-  text: 'Access Denied',
+  title: 'Attention Required! | Cloudflare',
+  text:
+    'Attention Required! Please enable cookies. Sorry, you have been blocked. ' +
+    'You are unable to access example.com. Why have I been blocked? This website ' +
+    'is using a security service to protect itself from online attacks. The action ' +
+    'you just performed triggered the security solution. There are several actions ' +
+    'that could trigger this block including submitting a certain word or phrase, a ' +
+    'SQL command or malformed data. What can I do to resolve this? You can email the ' +
+    'site owner to let them know you were blocked. Please include what you were doing ' +
+    'when this page came up and the Cloudflare Ray ID found at the bottom of this page.',
+  markdown:
+    '# Attention Required! | Cloudflare\n\nSorry, you have been blocked. You are unable ' +
+    'to access example.com. This website is using a security service to protect itself ' +
+    'from online attacks. Please enable cookies and try again, or email the site owner ' +
+    'to let them know you were blocked and include the Cloudflare Ray ID from this page.',
 };

@@ -110,13 +110,29 @@ export function assessQuality(
     schemaPassRate = passed / records.length;
   }
 
-  const score =
+  const weighted =
     schemaPassRate === null
       ? 0.5 * fieldCompleteness + 0.25 * (1 - duplicateRate) + 0.25 * (1 - suspectedBlockRate)
       : 0.4 * schemaPassRate +
         0.3 * fieldCompleteness +
         0.15 * (1 - duplicateRate) +
         0.15 * (1 - suspectedBlockRate);
+
+  // A bot wall is not a low-quality page, it is an absent one — so blocking is
+  // a ceiling on the score, not a 0.15 deduction from it.
+  //
+  // As a weighted term alone it could never trigger a retry. A batch of pages
+  // that are 100% bot walls but carry a url and >50 chars of "Attention
+  // Required! | Cloudflare…" scores 0.4 schema + 0.3 completeness + 0.15
+  // non-duplicate + 0 blocked = 0.85, sailing past the 0.70 retry threshold in
+  // scrape-url. The escalation ladder — residential proxies, then a real
+  // browser — existed for exactly that page and never ran for it.
+  //
+  // The ceiling is `1 - suspectedBlockRate`, which reads as: a batch cannot
+  // score above the fraction of it that is actually content. All blocked caps
+  // at 0; a quarter blocked caps at 0.75. Nothing changes for a clean batch,
+  // where the ceiling is 1.
+  const score = Math.min(weighted, 1 - suspectedBlockRate);
 
   return {
     score: Math.round(score * 1000) / 1000,

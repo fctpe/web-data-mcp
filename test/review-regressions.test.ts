@@ -185,7 +185,11 @@ describe('scrape_url best-run retention', () => {
     };
     expect(structured.run_id).toBe('run-1');
     expect(structured.attempts).toBe(3);
-    expect(result.content?.[0]?.text).toContain('LOW QUALITY');
+    // Two of the three sampled pages are bot walls, so the warning names that
+    // rather than saying 'LOW QUALITY' — which reads as thin content and invites
+    // a model to summarise the wall as if it were the page.
+    expect(result.content?.[0]?.text).toContain('BLOCKED');
+    expect(result.content?.[0]?.text).toContain('67%');
   });
 
   it('fails with the last error when no attempt ever succeeds', async () => {
