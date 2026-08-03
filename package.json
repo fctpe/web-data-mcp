@@ -41,7 +41,7 @@
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/node": "2.0.0-beta.3",
+    "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0-beta.3",
     "ajv": "^8.17.1",
     "apify-client": "^2.23.4",
