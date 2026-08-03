@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: Tag must match package.json and server.json versions
+        run: |
+          node -e "
+            const want = process.env.GITHUB_REF_NAME.replace(/^v/, '');
+            const server = require('./server.json');
+            const found = {
+              'package.json': require('./package.json').version,
+              'server.json': server.version,
+              'server.json packages[0]': server.packages[0].version,
+            };
+            const bad = Object.entries(found).filter(([, v]) => v !== want);
+            if (bad.length) { console.error('tag', want, 'does not match', Object.fromEntries(bad)); process.exit(1); }
+            console.log('version ok:', want);
+          "
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      # The same two smokes that gate main. The path that ships must exercise the
+      # built dist/ over a real protocol stream, not just the path that merges.
+      - name: MCP stdio smoke (real client round trip)
+        run: node scripts/stdio-smoke.mjs
+      - name: MCP stdio smoke with tracing enabled
+        env:
+          OTEL_EXPORTER_OTLP_ENDPOINT: http://127.0.0.1:4318
+        run: node scripts/stdio-smoke.mjs
+      - run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,12 +1,14 @@
+import { constants } from 'node:os';
 import { parseArgs } from 'node:util';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { configFromEnv } from './config.js';
 import { createApifyGateway } from './core/apify.js';
 import type { ServerDeps } from './deps.js';
-import { createServer } from './server.js';
+import { createServer, SERVER_NAME, SERVER_VERSION } from './server.js';
+import { shutdownTracing, startTracing } from './tracing.js';
 import { serveHttp } from './transports/http.js';
 
-function main(): void {
+async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
       transport: { type: 'string', default: 'stdio' },
@@ -21,7 +23,9 @@ function main(): void {
         'Env:\n' +
         '  APIFY_TOKEN                    required\n' +
         '  WEB_DATA_MCP_ALLOWED_ACTORS    optional comma-separated actor allowlist\n' +
-        '  WEB_DATA_MCP_HTTP_TOKEN        required for --transport http',
+        '  WEB_DATA_MCP_HTTP_TOKEN        required for --transport http\n' +
+        '  OTEL_EXPORTER_OTLP_ENDPOINT    optional OTLP/HTTP collector; enables tracing\n' +
+        '                                 (OTEL_EXPORTER_OTLP_TRACES_ENDPOINT overrides it)',
     );
     process.exit(0);
   }
@@ -33,6 +37,8 @@ function main(): void {
     );
     process.exit(1);
   }
+
+  const tracing = await startTracing(SERVER_NAME, SERVER_VERSION);
 
   const deps: ServerDeps = {
     gateway: createApifyGateway(token),
@@ -59,8 +65,26 @@ function main(): void {
     process.exit(1);
   }
 
+  if (tracing) {
+    // Tracing must not change when this process dies. An MCP client stops a stdio
+    // server by closing its stdin and only escalates to a signal if that does not
+    // take; either way an exporter still retrying against a dead collector would
+    // otherwise hold the event loop open long past the client's patience.
+    //
+    // A signal-killed process exits 128+signum, which is what Node does with no
+    // handler installed. Exiting 0 instead would make the code an operator sees
+    // depend on whether a telemetry variable happens to be set.
+    const stop = (code: number): void => {
+      void shutdownTracing().finally(() => process.exit(code));
+    };
+    process.stdin.once('end', () => stop(0));
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.once(signal, () => stop(128 + constants.signals[signal]));
+    }
+  }
+
   void serveStdio(() => createServer(deps));
   console.error('web-data-mcp running on stdio');
 }
 
-main();
+void main();
