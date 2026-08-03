@@ -13,9 +13,19 @@ import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 const actor = process.env.SMOKE_ACTOR;
-const input = JSON.parse(process.env.SMOKE_INPUT ?? '{}');
 if (!process.env.APIFY_TOKEN || !actor) {
   console.error('Set APIFY_TOKEN and SMOKE_ACTOR (and optionally SMOKE_INPUT as JSON).');
+  process.exit(2);
+}
+
+// After the preflight, not before it: parsing first meant a shell that ate a
+// quote out of SMOKE_INPUT reported a JSON stack trace from node:internal
+// instead of the missing variable that was actually wrong.
+let input;
+try {
+  input = JSON.parse(process.env.SMOKE_INPUT ?? '{}');
+} catch (err) {
+  console.error(`SMOKE_INPUT is not valid JSON: ${err.message}`);
   process.exit(2);
 }
 

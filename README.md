@@ -133,7 +133,11 @@ Each dataset sample is scored 0..1 from four signals:
 - **Duplicate rate** — hash-based duplicate detection
 - **Bot-wall rate** — items containing block markers (`Access Denied`, `captcha`, `verify you are human`, …)
 
-Below threshold, retries escalate: original input → `+ residential proxies` → `+ playwright:firefox with dynamic-content waits`. Attempts and both scores are reported in the structured result, and exhausted retries return an `isError` result that tells the agent *why* and what to try next.
+**Blocking is a ceiling, not a deduction.** The final score is `min(weighted, 1 - bot_wall_rate)`: a batch cannot score higher than the fraction of it that is actually content. This is a correction, and the bug it fixes is worth stating plainly, because it defeated the feature this README leads with. As a 0.15-weighted term, blocking could never trigger a retry — a page of pure Cloudflare interstitial still carries a url and several hundred characters of prose, so it passed the schema, looked complete, wasn't a duplicate, and scored **0.85** against a 0.70 threshold. The escalation ladder never ran for the exact page it was built for. Worse, the fixture that should have caught it was the 13-character string `Access Denied`, which failed the schema's `minLength: 50` and made the test pass for an unrelated reason. [`test/blocked-content.test.ts`](test/blocked-content.test.ts) now attacks the scorer with a full-length wall and asserts the fixture stays long enough to keep doing so.
+
+Blocking also gets its own retry trigger (`suspected_block_rate > 0.2`) independent of the score, because a partly blocked batch caps above the threshold — 25% walls caps at 0.75 — and a quarter of your pages being walls is exactly what a residential proxy is for.
+
+Below threshold, retries escalate: original input → `+ residential proxies` → `+ playwright:firefox with dynamic-content waits`. Attempts and both scores are reported in the structured result, and exhausted retries return an `isError` result that tells the agent *why* and what to try next — naming a bot wall as a bot wall rather than as "low quality", since a model told the content is thin will summarise the wall as if it were the page.
 
 ## Example: LangGraph agent
 
@@ -147,7 +151,7 @@ OPENAI_API_KEY=... APIFY_TOKEN=... npm start -- "https://apify.com/pricing"
 
 ## Results: pressure-tested against production actors
 
-Beyond the 93 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
+Beyond the 100 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
 
 | Actor | Verdict | Quality score | Evidence |
 |---|---|---|---|

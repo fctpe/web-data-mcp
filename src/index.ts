@@ -8,25 +8,43 @@ import { createServer, SERVER_NAME, SERVER_VERSION } from './server.js';
 import { shutdownTracing, startTracing } from './tracing.js';
 import { serveHttp } from './transports/http.js';
 
+const USAGE =
+  'Usage: web-data-mcp [--transport stdio|http] [--port 3000]\n\n' +
+  'Env:\n' +
+  '  APIFY_TOKEN                    required\n' +
+  '  WEB_DATA_MCP_ALLOWED_ACTORS    optional comma-separated actor allowlist\n' +
+  '  WEB_DATA_MCP_HTTP_TOKEN        required for --transport http\n' +
+  '  OTEL_EXPORTER_OTLP_ENDPOINT    optional OTLP/HTTP collector; enables tracing\n' +
+  '                                 (OTEL_EXPORTER_OTLP_TRACES_ENDPOINT overrides it)';
+
+/**
+ * parseArgs throws on an unknown flag, a positional, or a flag missing its value
+ * — `-h` alone hits it, since only the long form is declared. Uncaught inside an
+ * async main that nothing awaits, that surfaces as an unhandled rejection: a Node
+ * stack trace out of node:internal, from a binary whose other two argument errors
+ * are one actionable line each. Usage is printed rather than "run --help",
+ * because for `-h` the suggestion would be the command that just failed.
+ */
+function parseCli(): { transport: string; port: string; help: boolean } {
+  try {
+    return parseArgs({
+      options: {
+        transport: { type: 'string', default: 'stdio' },
+        port: { type: 'string', default: '3000' },
+        help: { type: 'boolean', default: false },
+      },
+    }).values;
+  } catch (err) {
+    console.error(`${err instanceof Error ? err.message : String(err)}\n\n${USAGE}`);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
-  const { values } = parseArgs({
-    options: {
-      transport: { type: 'string', default: 'stdio' },
-      port: { type: 'string', default: '3000' },
-      help: { type: 'boolean', default: false },
-    },
-  });
+  const values = parseCli();
 
   if (values.help) {
-    console.error(
-      'Usage: web-data-mcp [--transport stdio|http] [--port 3000]\n\n' +
-        'Env:\n' +
-        '  APIFY_TOKEN                    required\n' +
-        '  WEB_DATA_MCP_ALLOWED_ACTORS    optional comma-separated actor allowlist\n' +
-        '  WEB_DATA_MCP_HTTP_TOKEN        required for --transport http\n' +
-        '  OTEL_EXPORTER_OTLP_ENDPOINT    optional OTLP/HTTP collector; enables tracing\n' +
-        '                                 (OTEL_EXPORTER_OTLP_TRACES_ENDPOINT overrides it)',
-    );
+    console.error(USAGE);
     process.exit(0);
   }
 
