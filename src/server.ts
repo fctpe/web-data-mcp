@@ -7,12 +7,13 @@ import { registerRetryLowQualityRun } from './tools/retry-low-quality-run.js';
 import { registerRunActor } from './tools/run-actor.js';
 import { registerScrapeUrl } from './tools/scrape-url.js';
 import { registerValidateDataset } from './tools/validate-dataset.js';
+import { traceToolCalls } from './tracing.js';
 
 export const SERVER_NAME = 'web-data-mcp';
 export const SERVER_VERSION = '0.1.0';
 
 export function createServer(deps: ServerDeps): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
+  const server = traceToolCalls(new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }));
   registerScrapeUrl(server, deps);
   registerRunActor(server, deps);
   registerGetRunStatus(server, deps);

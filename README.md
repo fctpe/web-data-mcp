@@ -111,6 +111,19 @@ WEB_DATA_MCP_HTTP_TOKEN=$(openssl rand -hex 24) node dist/index.js --transport h
 
 Binds to `127.0.0.1` with Host/Origin validation (DNS-rebinding protection) and constant-time bearer auth. Built on the MCP TypeScript SDK v2 (spec 2026-07-28); 2025-era clients are served through the SDK's built-in legacy fallback.
 
+### Tracing (optional)
+
+```bash
+pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 node dist/index.js
+```
+
+One span per tool call, named `execute_tool <tool>`, carrying `gen_ai.operation.name`, `gen_ai.tool.name`, and — for the tools that score their data — `web_data_mcp.quality.score`, so a bad scrape is visible in the trace and not just in the tool result. Failed calls get span status `ERROR`.
+
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is honoured too and, as the standard requires, wins over the base endpoint. Both are held to the same rule: an endpoint that is not an `http(s)` URL turns tracing **off** with a message naming the variable, because the exporter would otherwise accept it and drop every span in silence.
+
+With neither variable set the SDK is never imported, so the packages above do not need to be installed at all; they are optional peers. Set but unloadable, the server says so on stderr and runs untraced rather than pretending. Failures after startup — a collector answering 401, a wrong port — are reported on stderr as well, through an OpenTelemetry diagnostic logger that writes **only** to stderr. Export is **OTLP/HTTP only and there is no console exporter** — stdout belongs to the MCP protocol stream, and a span printed there corrupts every message on it. A collector that is down cannot hold the server up either: shutdown waits at most two seconds for anything still in flight, and says on stderr when that deadline drops spans.
+
 ## How the quality gate works
 
 Each dataset sample is scored 0..1 from four signals:
@@ -134,7 +147,7 @@ OPENAI_API_KEY=... APIFY_TOKEN=... npm start -- "https://apify.com/pricing"
 
 ## Results: pressure-tested against production actors
 
-Beyond the 75 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
+Beyond the 93 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
 
 | Actor | Verdict | Quality score | Evidence |
 |---|---|---|---|
@@ -165,6 +178,8 @@ Architecture decisions are recorded in [`docs/adr/`](docs/adr): curated tools vs
 pnpm test        # offline test suite incl. full client<->server integration
 pnpm lint && pnpm typecheck
 pnpm inspect     # build + MCP Inspector
+node scripts/stdio-smoke.mjs                                 # protocol round trip against dist/
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 node scripts/stdio-smoke.mjs   # same, tracing on
 APIFY_TOKEN=... SMOKE_ACTOR=... node scripts/live-smoke.mjs   # pre-release live smoke
 ```
 

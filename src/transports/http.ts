@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer } from 'node:http';
+import { constants } from 'node:os';
 import {
   localhostHostValidation,
   localhostOriginValidation,
@@ -8,6 +9,7 @@ import {
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import type { ServerDeps } from '../deps.js';
 import { createServer } from '../server.js';
+import { shutdownTracing } from '../tracing.js';
 
 function constantTimeEquals(a: string, b: string): boolean {
   // Hash both sides first so the comparison never branches on input length.
@@ -44,8 +46,16 @@ export function serveHttp(deps: ServerDeps, opts: { port: number; token: string 
     console.error(`web-data-mcp listening on http://127.0.0.1:${opts.port}/mcp`);
   });
 
-  process.on('SIGINT', () => {
-    httpServer.close();
-    void handler.close().finally(() => process.exit(0));
-  });
+  // SIGTERM as well as SIGINT: it is what Docker and Kubernetes send, and handling
+  // only SIGINT killed the process outright there — no handler.close(), no flush.
+  // Exit 128+signum, the code Node produces when no handler is installed at all.
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      httpServer.close();
+      void handler
+        .close()
+        .finally(shutdownTracing)
+        .finally(() => process.exit(128 + constants.signals[signal]));
+    });
+  }
 }

@@ -33,8 +33,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsx src/index.ts",
-    "lint": "biome check src test",
-    "lint:fix": "biome check --write src test",
+    "lint": "biome check src test scripts",
+    "lint:fix": "biome check --write src test scripts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -48,9 +48,22 @@
     "js-tiktoken": "^1.0.21",
     "zod": "^4.4.3"
   },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": { "optional": true },
+    "@opentelemetry/exporter-trace-otlp-http": { "optional": true },
+    "@opentelemetry/sdk-trace-base": { "optional": true }
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
     "@modelcontextprotocol/client": "2.0.0-beta.3",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@types/node": "^26.1.1",
     "tsup": "^8.5.1",
     "tsx": "^4.23.0",

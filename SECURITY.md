@@ -4,7 +4,8 @@
 
 - `APIFY_TOKEN` is read from the environment once at startup, passed only to the official `apify-client`, and never logged, echoed into tool results, or included in error messages (see `src/core/errors.ts`).
 - The Streamable HTTP transport requires a bearer token (`WEB_DATA_MCP_HTTP_TOKEN`), compared in constant time, and binds to `127.0.0.1` with Host/Origin validation in front of the handler to prevent DNS rebinding.
-- stdio mode logs to stderr only; stdout is reserved for the protocol stream.
+- stdio mode logs to stderr only; stdout is reserved for the protocol stream. Optional tracing exports over OTLP/HTTP only and offers no console exporter, so telemetry can never be written into that stream. Its OpenTelemetry diagnostic logger writes every level to stderr rather than using `DiagConsoleLogger`, which routes `info` and `debug` to stdout (`src/tracing.ts`).
+- Spans carry only the tool name and, where the tool scores its data, the quality score. A failing tool call contributes the message it already returned to the caller — one that has been through `mapApifyError` — and a raw throw is deliberately not recorded, so no unsanitized message or stack reaches an external collector.
 
 ## Abuse guards
 
