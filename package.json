@@ -23,6 +23,14 @@
     "node": ">=20"
   },
   "packageManager": "pnpm@10.17.0",
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "^3.1.5",
+      "ip-address": "^10.3.1",
+      "hono": "^4.12.34",
+      "@hono/node-server": "^2.0.5"
+    }
+  },
   "bin": {
     "web-data-mcp": "dist/index.js"
   },
@@ -45,6 +53,7 @@
     "@modelcontextprotocol/server": "2.0.0-beta.3",
     "ajv": "^8.17.1",
     "apify-client": "^2.23.4",
+    "hono": "^4.12.34",
     "js-tiktoken": "^1.0.21",
     "zod": "^4.4.3"
   },
