@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/fctpe/web-data-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/fctpe/web-data-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Node >=20](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
+![Node >=22](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
 
 **Quality-gated web data for AI agents.** An MCP server that runs [Apify](https://apify.com) scraping actors and — unlike a raw passthrough — validates what came back, scores it, retries with stronger anti-blocking settings when it's bad, and hands your agent embedding-ready chunks instead of a JSON dump.
 
