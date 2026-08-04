@@ -111,6 +111,88 @@ describe('exit code after a signal', () => {
 });
 
 /**
+ * The tests above only prove the HTTP server *starts* — they wait for the
+ * listening line and then send it a signal. Nothing ever went through the
+ * handler, so the whole hono request path was untested, and a transitive
+ * `@hono/node-server` bump across a major (1.19 -> 2.1, taken to clear
+ * GHSA-frvp-7c67-39w9) would have gone green while serving 500s to every real
+ * client. One round trip over the wire is what the startup assertion cannot
+ * substitute for.
+ */
+describe('http transport serves a real request', () => {
+  async function serve(): Promise<{ url: string; token: string }> {
+    const port = await freePort();
+    const token = 'round-trip-token';
+    await spawnServer(
+      ['--transport', 'http', '--port', String(port)],
+      { WEB_DATA_MCP_HTTP_TOKEN: token },
+      'listening on http://127.0.0.1:',
+    );
+    return { url: `http://127.0.0.1:${port}/mcp`, token };
+  }
+
+  function rpc(url: string, token: string, body: unknown): Promise<Response> {
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  const INITIALIZE = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2026-07-28',
+      capabilities: {},
+      clientInfo: { name: 'lifecycle-test', version: '0' },
+    },
+  };
+
+  /** Responses come back as SSE frames, so the JSON is behind a `data:` line. */
+  function parseRpc(text: string): { result?: { tools?: { name: string }[] } } {
+    const frame = text.includes('data: ') ? text.split('data: ').pop()?.trim() : text;
+    return JSON.parse(frame ?? '{}');
+  }
+
+  it('answers tools/list over the wire with every tool the stdio server exposes', async () => {
+    const { url, token } = await serve();
+    const init = await rpc(url, token, INITIALIZE);
+    expect(init.status).toBe(200);
+
+    const listed = await rpc(url, token, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    expect(listed.status).toBe(200);
+    const tools = parseRpc(await listed.text()).result?.tools ?? [];
+    expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'dataset_to_rag_documents',
+      'fetch_dataset_items',
+      'get_run_status',
+      'retry_low_quality_run',
+      'run_actor',
+      'scrape_url',
+      'validate_dataset',
+    ]);
+  }, 30_000);
+
+  /**
+   * Negative control for the test above. If the bearer check ever stopped
+   * running, `tools/list` would still return seven tools and that assertion
+   * would still pass — while the server answered anyone who asked.
+   */
+  it('rejects a wrong bearer token before the handler sees the request', async () => {
+    const { url } = await serve();
+    const denied = await rpc(url, 'not-the-token', INITIALIZE);
+    expect(denied.status).toBe(401);
+    expect(await denied.text()).toContain('unauthorized');
+  }, 30_000);
+});
+
+/**
  * server.ts imports traceToolCalls from tracing.ts. tracing.ts importing
  * SERVER_NAME/SERVER_VERSION back from server.ts closed the loop, and only the
  * laziness of the read kept it working. The name and version are arguments now.
