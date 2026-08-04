@@ -151,15 +151,11 @@ OPENAI_API_KEY=... APIFY_TOKEN=... npm start -- "https://apify.com/pricing"
 
 ## Results: pressure-tested against production actors
 
-Beyond the 100 offline tests, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested on 2026-07-12 against three **production** Apify actors with real workloads:
+**106 offline tests** — `pnpm test`, no network, no token. Plus a real stdio round trip through the client library the repo already depends on: `node scripts/stdio-smoke.mjs` prints `smoke ok — 7 tools, all with output schemas, guard + tool call live`.
 
-| Actor | Verdict | Quality score | Evidence |
-|---|---|---|---|
-| Reddit keyword search | ✅ pass | 0.989 (schema pass rate 1.0) | 54 live posts; 44 RAG docs auto-detected; token budget truncated at 6/10 items with correct continuation offset |
-| Event listings (Berlin AI events) | ✅ pass | 0.903 (schema pass rate 1.0) | 28 live events; titles 100% filled; 37 RAG docs from `description` |
-| Ad-library intelligence | ✅ pass after fix | 0.938 | 10 live ads, key fields (adCopy, headline, pageName) filled |
+Beyond that, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested against three **production** Apify actors with real workloads. Those runs committed no artifact and are not reproducible from this repository — reproducing them needs an `APIFY_TOKEN` and named actor slugs — so no quality score or item count from them is quoted here. `scripts/live-smoke.mjs` is the documented path for anyone with a token to run the same flow against their own actor and read the numbers off their own output.
 
-The live runs caught two bugs the mocked tests couldn't, both fixed with regression tests:
+What the live runs did leave behind is checkable: two bugs the mocked tests could not catch, each now pinned by a regression test in `test/review-regressions.test.ts`:
 
 1. **Apify's dataset `itemCount` is eventually consistent** — it reads 0 for a few seconds after a run finishes. Pagination now floors the total at what was actually fetched.
 2. **A 245-token CDN image URL out-lengthed the ad copy** in the RAG auto-detect fallback, producing well-formed garbage embeddings. Content detection now requires prose shape (whitespace ratio, non-URL) and skips items honestly instead.
