@@ -10,15 +10,33 @@
 
 Scraped data fails silently: the run "succeeds" but the dataset is a wall of `Access Denied` pages, half-empty records, or duplicates — and an agent that can't see quality will happily reason over garbage. This server makes data quality a first-class, machine-readable part of every tool result.
 
-```mermaid
-flowchart LR
-    A[AI agent] -->|MCP| S[web-data-mcp]
-    S --> R[Run actor]
-    R --> Q{Quality gate<br/>schema · completeness<br/>dupes · bot-wall}
-    Q -->|score >= threshold| C[Chunked, token-bounded,<br/>hash-addressed documents]
-    Q -->|score < threshold| E[Escalate: residential proxies,<br/>browser crawler] --> R
-    C --> A
+## Quickstart
+
+```bash
+git clone https://github.com/fctpe/web-data-mcp && cd web-data-mcp
+pnpm install && pnpm build
+
+# poke every tool in a UI
+APIFY_TOKEN=your-token npx @modelcontextprotocol/inspector node dist/index.js
+
+# Claude Code
+claude mcp add web-data --env APIFY_TOKEN=your-token -- node /path/to/web-data-mcp/dist/index.js
+
+# Claude Desktop / Cursor / any stdio client — add to your MCP config:
+{
+  "mcpServers": {
+    "web-data": {
+      "command": "node",
+      "args": ["/path/to/web-data-mcp/dist/index.js"],
+      "env": { "APIFY_TOKEN": "your-token" }
+    }
+  }
+}
 ```
+
+(`npx -y web-data-mcp` will replace the node path once the first npm release is published — the `bin` entry is already wired.)
+
+Free Apify accounts include $5/month of platform credit — enough for hundreds of `scrape_url` calls with the default cheerio crawler.
 
 ## Why not the official Apify MCP server?
 
@@ -31,6 +49,16 @@ Use both — they solve different problems.
 | Bad scrapes | Your agent finds out the hard way | Scored (`quality.score`), auto-retried with escalating anti-blocking settings |
 | RAG | Bring your own chunking | `dataset_to_rag_documents`: token-bounded chunks, overlap, stable content-hash ids |
 | Guardrails | Platform-level | Actor allowlist, SSRF guard (no private hosts), clamped memory/timeouts, hard response token caps |
+
+```mermaid
+flowchart LR
+    A[AI agent] -->|MCP| S[web-data-mcp]
+    S --> R[Run actor]
+    R --> Q{Quality gate<br/>schema · completeness<br/>dupes · bot-wall}
+    Q -->|score >= threshold| C[Chunked, token-bounded,<br/>hash-addressed documents]
+    Q -->|score < threshold| E[Escalate: residential proxies,<br/>browser crawler] --> R
+    C --> A
+```
 
 ## Tools
 
@@ -75,55 +103,6 @@ And a `dataset_to_rag_documents` line — token-bounded, source-attributed, cont
   "metadata": { "crawledAt": "2026-07-12T…" } }
 ```
 
-## Quickstart
-
-```bash
-git clone https://github.com/fctpe/web-data-mcp && cd web-data-mcp
-pnpm install && pnpm build
-
-# poke every tool in a UI
-APIFY_TOKEN=your-token npx @modelcontextprotocol/inspector node dist/index.js
-
-# Claude Code
-claude mcp add web-data --env APIFY_TOKEN=your-token -- node /path/to/web-data-mcp/dist/index.js
-
-# Claude Desktop / Cursor / any stdio client — add to your MCP config:
-{
-  "mcpServers": {
-    "web-data": {
-      "command": "node",
-      "args": ["/path/to/web-data-mcp/dist/index.js"],
-      "env": { "APIFY_TOKEN": "your-token" }
-    }
-  }
-}
-```
-
-(`npx -y web-data-mcp` will replace the node path once the first npm release is published — the `bin` entry is already wired.)
-
-Free Apify accounts include $5/month of platform credit — enough for hundreds of `scrape_url` calls with the default cheerio crawler.
-
-### HTTP mode
-
-```bash
-WEB_DATA_MCP_HTTP_TOKEN=$(openssl rand -hex 24) node dist/index.js --transport http --port 3000
-```
-
-Binds to `127.0.0.1` with Host/Origin validation (DNS-rebinding protection) and constant-time bearer auth. Built on the MCP TypeScript SDK v2 (spec 2026-07-28); 2025-era clients are served through the SDK's built-in legacy fallback.
-
-### Tracing (optional)
-
-```bash
-pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http
-OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 node dist/index.js
-```
-
-One span per tool call, named `execute_tool <tool>`, carrying `gen_ai.operation.name`, `gen_ai.tool.name`, and — for the tools that score their data — `web_data_mcp.quality.score`, so a bad scrape is visible in the trace and not just in the tool result. Failed calls get span status `ERROR`.
-
-`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is honoured too and, as the standard requires, wins over the base endpoint. Both are held to the same rule: an endpoint that is not an `http(s)` URL turns tracing **off** with a message naming the variable, because the exporter would otherwise accept it and drop every span in silence.
-
-With neither variable set the SDK is never imported, so the packages above do not need to be installed at all; they are optional peers. Set but unloadable, the server says so on stderr and runs untraced rather than pretending. Failures after startup — a collector answering 401, a wrong port — are reported on stderr as well, through an OpenTelemetry diagnostic logger that writes **only** to stderr. Export is **OTLP/HTTP only and there is no console exporter** — stdout belongs to the MCP protocol stream, and a span printed there corrupts every message on it. A collector that is down cannot hold the server up either: shutdown waits at most two seconds for anything still in flight, and says on stderr when that deadline drops spans.
-
 ## How the quality gate works
 
 Each dataset sample is scored 0..1 from four signals:
@@ -133,11 +112,41 @@ Each dataset sample is scored 0..1 from four signals:
 - **Duplicate rate** — hash-based duplicate detection
 - **Bot-wall rate** — items containing block markers (`Access Denied`, `captcha`, `verify you are human`, …)
 
-**Blocking is a ceiling, not a deduction.** The final score is `min(weighted, 1 - bot_wall_rate)`: a batch cannot score higher than the fraction of it that is actually content. This is a correction, and the bug it fixes is worth stating plainly, because it defeated the feature this README leads with. As a 0.15-weighted term, blocking could never trigger a retry — a page of pure Cloudflare interstitial still carries a url and several hundred characters of prose, so it passed the schema, looked complete, wasn't a duplicate, and scored **0.85** against a 0.70 threshold. The escalation ladder never ran for the exact page it was built for. Worse, the fixture that should have caught it was the 13-character string `Access Denied`, which failed the schema's `minLength: 50` and made the test pass for an unrelated reason. [`test/blocked-content.test.ts`](test/blocked-content.test.ts) now attacks the scorer with a full-length wall and asserts the fixture stays long enough to keep doing so.
+**Blocking is a ceiling, not a deduction.** The final score is `min(weighted, 1 - bot_wall_rate)`: a batch cannot score higher than the fraction of it that is actually content. Blocking also gets its own retry trigger (`suspected_block_rate > 0.2`) independent of the score, because a partly blocked batch caps above the threshold — 25% walls caps at 0.75 — and a quarter of your pages being walls is exactly what a residential proxy is for. Why it is a ceiling and not a weighted term, and the test that attacks it: [ADR 0005](docs/adr/0005-blocking-is-a-ceiling-not-a-deduction.md) and [`test/blocked-content.test.ts`](test/blocked-content.test.ts).
 
-Blocking also gets its own retry trigger (`suspected_block_rate > 0.2`) independent of the score, because a partly blocked batch caps above the threshold — 25% walls caps at 0.75 — and a quarter of your pages being walls is exactly what a residential proxy is for.
+**These are heuristics.** The bot-wall regex catches common block pages, not all of them, and field completeness treats every field as equally important. Schema pass rate is the signal to rely on when you can supply a schema.
 
 Below threshold, retries escalate: original input → `+ residential proxies` → `+ playwright:firefox with dynamic-content waits`. Attempts and both scores are reported in the structured result, and exhausted retries return an `isError` result that tells the agent *why* and what to try next — naming a bot wall as a bot wall rather than as "low quality", since a model told the content is thin will summarise the wall as if it were the page.
+
+## Results
+
+**Reproducible from this repository: 106 offline tests** (`pnpm test`, no network, no token) **plus a real stdio protocol round trip** through the client library the repo already depends on — `node scripts/stdio-smoke.mjs` prints `smoke ok — 7 tools, all with output schemas, guard + tool call live`.
+
+Beyond that, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested against three **production** Apify actors with real workloads. **Those runs committed no artifact and are not reproducible here** — reproducing them needs an `APIFY_TOKEN` and named actor slugs — so no quality score or item count from them is quoted. `scripts/live-smoke.mjs` is the documented path for anyone with a token to run the same flow against their own actor and read the numbers off their own output.
+
+What the live runs did leave behind is checkable: two bugs the mocked tests could not catch, each now pinned by a regression test in `test/review-regressions.test.ts`:
+
+1. **Apify's dataset `itemCount` is eventually consistent** — it reads 0 for a few seconds after a run finishes. Pagination now floors the total at what was actually fetched.
+2. **A 245-token CDN image URL out-lengthed the ad copy** in the RAG auto-detect fallback, producing well-formed garbage embeddings. Content detection now requires prose shape (whitespace ratio, non-URL) and skips items honestly instead.
+
+## HTTP mode
+
+```bash
+WEB_DATA_MCP_HTTP_TOKEN=$(openssl rand -hex 24) node dist/index.js --transport http --port 3000
+```
+
+Binds to `127.0.0.1` with Host/Origin validation (DNS-rebinding protection) and constant-time bearer auth. Built on the MCP TypeScript SDK v2 (spec 2026-07-28); 2025-era clients are served through the SDK's built-in legacy fallback.
+
+## Tracing (optional)
+
+```bash
+pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 node dist/index.js
+```
+
+One span per tool call, named `execute_tool <tool>`, carrying `gen_ai.operation.name`, `gen_ai.tool.name`, and — for the tools that score their data — `web_data_mcp.quality.score`, so a bad scrape is visible in the trace and not just in the tool result. Failed calls get span status `ERROR`. `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is honoured too and, as the standard requires, wins over the base endpoint.
+
+Export is **OTLP/HTTP only, with no console exporter** — stdout belongs to the MCP protocol stream. An endpoint that is not an `http(s)` URL turns tracing **off** with a message naming the variable rather than dropping every span in silence, and with neither variable set the SDK is never imported at all, so the packages above are genuinely optional peers. The stdout/stderr rules and what the spans may carry are in [SECURITY.md](SECURITY.md).
 
 ## Example: LangGraph agent
 
@@ -149,28 +158,17 @@ npm install
 OPENAI_API_KEY=... APIFY_TOKEN=... npm start -- "https://apify.com/pricing"
 ```
 
-## Results: pressure-tested against production actors
-
-**106 offline tests** — `pnpm test`, no network, no token. Plus a real stdio round trip through the client library the repo already depends on: `node scripts/stdio-smoke.mjs` prints `smoke ok — 7 tools, all with output schemas, guard + tool call live`.
-
-Beyond that, the full MCP flow (run → status → fetch → validate → RAG) was pressure-tested against three **production** Apify actors with real workloads. Those runs committed no artifact and are not reproducible from this repository — reproducing them needs an `APIFY_TOKEN` and named actor slugs — so no quality score or item count from them is quoted here. `scripts/live-smoke.mjs` is the documented path for anyone with a token to run the same flow against their own actor and read the numbers off their own output.
-
-What the live runs did leave behind is checkable: two bugs the mocked tests could not catch, each now pinned by a regression test in `test/review-regressions.test.ts`:
-
-1. **Apify's dataset `itemCount` is eventually consistent** — it reads 0 for a few seconds after a run finishes. Pagination now floors the total at what was actually fetched.
-2. **A 245-token CDN image URL out-lengthed the ad copy** in the RAG auto-detect fallback, producing well-formed garbage embeddings. Content detection now requires prose shape (whitespace ratio, non-URL) and skips items honestly instead.
-
-## Design notes
-
-Architecture decisions are recorded in [`docs/adr/`](docs/adr): curated tools vs. dynamic discovery, SDK v2 beta, the dependency-injected gateway that keeps the whole test suite offline and sub-second, and hard token budgets with explicit handles. Security posture (token handling, URL guard, transport auth) is in [SECURITY.md](SECURITY.md).
-
 ## Limitations
 
-- Quality scoring is heuristic. The bot-wall regex catches common block pages, not all of them, and `field completeness` treats all fields as equally important. Schema pass rate is the signal to rely on when you can provide a schema.
+- Quality scoring is heuristic (see above). Schema pass rate is the signal to rely on when you can provide a schema.
 - Escalation strategies (`crawlerType`, `dynamicContentWaitSecs`) target `apify/website-content-crawler`-style inputs; other actors get proxy escalation only, and unknown input keys are passed through untouched.
 - `retry_low_quality_run` re-runs the *whole* actor input — it does not retry only failed URLs within a run.
 - No streaming: long crawls block up to the wait budget (300s default). Fire-and-forget via `run_actor` + polling is the workaround for bigger jobs.
 - Tested against `apify-client` 2.x and MCP SDK `2.0.0-beta.3` (pinned); the pin will move to v2 stable when it ships.
+
+## Design notes
+
+Architecture decisions are recorded in [`docs/adr/`](docs/adr): curated tools vs. dynamic discovery, SDK v2 beta, the dependency-injected gateway that keeps the whole test suite offline and sub-second, hard token budgets with explicit handles, and why blocking caps the quality score. Security posture (token handling, URL guard, transport auth) is in [SECURITY.md](SECURITY.md).
 
 ## Development
 
