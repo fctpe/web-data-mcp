@@ -27,7 +27,7 @@
     "overrides": {
       "fast-uri": "^3.1.5",
       "ip-address": "^10.3.1",
-      "hono": "^4.12.34",
+      "hono": "^4.13.5",
       "@hono/node-server": "^2.0.5"
     }
   },
@@ -52,10 +52,10 @@
     "@modelcontextprotocol/node": "2.0.0-beta.3",
     "@modelcontextprotocol/server": "2.0.0-beta.3",
     "ajv": "^8.17.1",
-    "apify-client": "^2.23.4",
-    "hono": "^4.12.34",
+    "apify-client": "^2.25.0",
+    "hono": "^4.13.5",
     "js-tiktoken": "^1.0.21",
-    "zod": "^4.4.3"
+    "zod": "^4.5.2"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -68,15 +68,15 @@
     "@opentelemetry/sdk-trace-base": { "optional": true }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.3",
+    "@biomejs/biome": "^2.5.11",
     "@modelcontextprotocol/client": "2.0.0-beta.3",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.4.0",
     "tsup": "^8.5.1",
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
