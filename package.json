@@ -27,7 +27,7 @@
     "overrides": {
       "fast-uri": "^3.1.5",
       "ip-address": "^10.3.1",
-      "hono": "^4.12.34",
+      "hono": "^4.13.10",
       "@hono/node-server": "^2.0.5"
     }
   },
@@ -49,18 +49,18 @@
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/node": "2.0.0-beta.3",
-    "@modelcontextprotocol/server": "2.0.0-beta.3",
+    "@modelcontextprotocol/node": "2.1.0",
+    "@modelcontextprotocol/server": "2.1.0",
     "ajv": "^8.17.1",
-    "apify-client": "^2.23.4",
-    "hono": "^4.12.34",
+    "apify-client": "^2.25.0",
+    "hono": "^4.13.10",
     "js-tiktoken": "^1.0.21",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
-    "@opentelemetry/sdk-trace-base": "^2.10.0"
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/api": { "optional": true },
@@ -68,15 +68,15 @@
     "@opentelemetry/sdk-trace-base": { "optional": true }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.3",
-    "@modelcontextprotocol/client": "2.0.0-beta.3",
+    "@biomejs/biome": "^2.5.14",
+    "@modelcontextprotocol/client": "2.1.0",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
-    "@opentelemetry/sdk-trace-base": "^2.10.0",
-    "@types/node": "^26.1.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@types/node": "^26.6.3",
     "tsup": "^8.5.1",
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
